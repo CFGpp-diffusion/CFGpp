@@ -432,7 +432,7 @@ class InversionDDIMCFGpp(BaseDDIMCFGpp):
         return img.detach().cpu()
 
 @register_solver("ddim_edit_cfg++")
-class EditWardSwapDDIMCFGpp(BaseDDIMCFGpp):
+class EditWardSwapDDIMCFGpp(InversionDDIMCFGpp):
     """
     Editing via WardSwap after inversion.
     Useful for text-guided image editing.
