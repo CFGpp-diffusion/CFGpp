@@ -64,29 +64,6 @@ class DrawNoisyCallback(DiffusionCallback):
         save_image(x0t, self.workdir.joinpath(f"record/noisy/xt_{int(t)}.png"))
         return callback_kwargs
 
-@register_callback("draw_sds_loss")
-class DrawDSMLossCallback(DiffusionCallback):
-    def __init__(self, frequency: int, workdir: Path):
-        super().__init__(frequency, workdir)
-        workdir.joinpath("record/sds_loss").mkdir(parents=True, exist_ok=True)
-        self.loss_list = []
-
-    @torch.no_grad()
-    def callback(self, step, t, callback_kwargs):
-        loss = callback_kwargs["sds"]
-        self.loss_list.append(loss)
-
-        with open(self.workdir.joinpath("record/sds_loss/sds_loss.txt"), "a") as f:
-            f.write(f"{t},{loss}\n")
-
-        if t == 1:
-            # plot loss
-            import matplotlib.pyplot as plt
-            plt.plot(self.loss_list)
-            plt.savefig(self.workdir.joinpath(f"record/sds_loss/sds_loss_{int(t)}.png"))
-
-        return callback_kwargs
-
 class ComposeCallback(DiffusionCallback):
     def __init__(self, workdir, callbacks: list[str], frequency:int=5):
         super().__init__(frequency, workdir)
