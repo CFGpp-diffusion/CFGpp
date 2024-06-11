@@ -73,6 +73,16 @@ python -m examples.img_edit --src_prompt "a photography of baby fox" --tgt_promp
 python -m examples.inversion --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_cfg++" --cfg_guidance 0.6
 ```
 
+## Callback
+
+We provide callback functionality to monitor intermediate samples during diffusion reverse process. For now, the function could be called only at the end of each timestep, for the readability of scripts.
+
+Currently, we provide two options (default: None).
+- draw_tweedie : save $\hat x_{0|t}$ to workdir
+- draw_noisy : save $x_t$ to workdir
+
+Note that using callback may take more time due to file save. You can refer utils/callback_util.py for details.
+
 ## Reference
 If you find our method is useful, please cite below or leave a star to this repository.
 
