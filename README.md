@@ -72,3 +72,10 @@ python -m examples.img_edit --src_prompt "a photography of baby fox" --tgt_promp
 ```
 python -m examples.inversion --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_cfg++" --cfg_guidance 0.6
 ```
+
+## Reference
+If you find our method is useful, please cite below or leave a star to this repository.
+
+```
+blahblah
+```
