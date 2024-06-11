@@ -298,7 +298,7 @@ class SDXL():
 
             with torch.no_grad():
                 noise_uc, noise_c  = self.predict_noise(zt, t, uc, c, add_cond_kwargs)
-                noise_pred = noise_uc + cfg_guidance * at * (noise_c - noise_uc)
+                noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
 
             z0t = (zt - (1-at_prev).sqrt() * noise_pred) / at_prev.sqrt()
             zt = at.sqrt() * z0t + (1-at).sqrt() * noise_pred
@@ -346,8 +346,7 @@ class BaseDDIM(SDXL):
             zt = at_next.sqrt() * z0t + (1-at_next).sqrt() * noise_pred
 
             if callback_fn is not None:
-                callback_kwargs = { 'sds': sds_loss.detach().item(),
-                                    'z0t': z0t.detach(),
+                callback_kwargs = { 'z0t': z0t.detach(),
                                     'zt': zt.detach(),
                                     'decode': self.decode}
                 callback_kwargs = callback_fn(step, t, callback_kwargs)
@@ -476,7 +475,6 @@ class EditWardSwapDDIM(BaseDDIM):
                 noise_uc, noise_c = self.predict_noise(zt, t, 
                                                        null_prompt_embeds,
                                                        tgt_prompt_embed,
-                                                       cfg_guidance,
                                                        add_tgt_cond_kwargs)
                 noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
             
@@ -517,7 +515,7 @@ class BaseDDIMCFGpp(SDXL):
             at = self.alpha(t)
             at_prev = self.alpha(t - self.skip)
 
-            noise_uc, noise_c  = self.predict_noise(zt, t, uc, c, cfg_guidance, add_cond_kwargs)
+            noise_uc, noise_c  = self.predict_noise(zt, t, uc, c, add_cond_kwargs)
             noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
 
             z0t = (zt - (1-at_prev).sqrt() * noise_uc) / at_prev.sqrt()
@@ -557,8 +555,7 @@ class BaseDDIMCFGpp(SDXL):
             zt = at_next.sqrt() * z0t + (1-at_next).sqrt() * noise_uc
 
             if callback_fn is not None:
-                callback_kwargs = { 'sds': sds_loss.detach().item(),
-                                    'z0t': z0t.detach(),
+                callback_kwargs = { 'z0t': z0t.detach(),
                                     'zt': zt.detach(),
                                     'decode': self.decode}
                 callback_kwargs = callback_fn(step, t, callback_kwargs)
@@ -586,8 +583,8 @@ class EditWardSwapDDIMCFGpp(EditWardSwapDDIM):
             noise_uc, noise_c  = self.predict_noise(zt, t, uc, c, add_cond_kwargs)
             noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
 
-            z0t = (zt - (1-at_prev).sqrt() * noise_pred) / at_prev.sqrt()
-            zt = at.sqrt() * z0t + (1-at).sqrt() * noise_uc
+            z0t = (zt - (1-at_prev).sqrt() * noise_uc) / at_prev.sqrt()
+            zt = at.sqrt() * z0t + (1-at).sqrt() * noise_pred
 
         return zt
 
