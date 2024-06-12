@@ -66,12 +66,12 @@ python -m examples.inversion --prompt "a photography of baby fox" --method "ddim
 
 - CFG
 ```
-python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_edit" --cfg_guidance 7.5
+python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_edit" --model "sdxl" --cfg_guidance 7.5
 ```
 
 - CFG ++
 ```
-python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_edit_cfg++" --cfg_guidance 0.6
+python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_edit_cfg++" --model "sdxl" --cfg_guidance 0.6
 ```
 
 ## Callback
