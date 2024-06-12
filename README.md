@@ -5,19 +5,20 @@
 ---
 ## Summary
 
-*Classifier-free guidance (CFG)* is a fundamental tool in modern diffusion models for text-guided generation. 
+*Classifier-free guidance (CFG)* is a fundamental tool in modern diffusion models for text-guided generation. Although effective, CFG requires high guidance scales, which has notable drawbacks:
 
-Although effective, CFG has notable drawbacks. For instance, 
-- DDIM with CFG lacks invertibility, complicating image editing;
-- Furthermore, high guidance scales, essential for high-quality outputs, frequently result in issues like mode collapse.
+1. Mode collapse and saturation
+2. Poor invertibility
+3. Unnatural, curved PF-ODE trajectory
 
-Contrary to the widespread belief that these are inherent limitations of diffusion models,
-this paper reveals that the problems actually stem from the **off-manifold phenomenon associated with CFG**, rather than the diffusion models themselves.
- 
-Inspired by the recent advancements of diffusion model-based inverse problem solvers (DIS),  we reformulate text-guidance as an inverse problem with a text-conditioned score matching loss, and develop CFG++, a novel approach that tackles the off-manifold challenges inherent in traditional CFG. 
+We propose a simple fix to this seemingly inherent limitation and propose CFG++, which corrects the off-manifold problem of CFG. The following advantages are observed
 
-CFG++ features a surprisingly simple fix to CFG, yet it offers significant improvements. Furthermore, CFG++ enables seamless interpolation between unconditional and conditional sampling at lower guidance scales, consistently outperforming traditional CFG at all scales. 
-CFG++ enables the reverse diffusion process can be understood as a reconstruction through scale-space representation.
+1. Small guidance scale $\lambda \in$ [0, 1] can be used with a similar effect as $\omega \in$ [1.0, 12.5] in CFG
+2. Better sample quality and better adherence to text
+3. Smooth, straighter PF-ODE trajectory
+4. Enhanced invertibility
+
+Experimental results confirm that our method significantly enhances performance in text-to-image generation, DDIM inversion, editing, and solving inverse problems, suggesting a wide-ranging impact and potential applications in various fields that utilize text guidance.
 
 ## Setup
 
