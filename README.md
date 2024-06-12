@@ -35,7 +35,7 @@ For reproducability, using the same package version is neccessary since some dep
 If you run one of below examples, diffusers will automatically download checkpoints for SDv1.5 or SDXL.
 
 
-## Examples
+## Examples (SDv1.5)
 
 ### Text-to-Image generation
 
@@ -72,6 +72,45 @@ python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_pro
 - CFG ++
 ```
 python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_edit_cfg++" --model "sdxl" --cfg_guidance 0.6
+```
+
+## Examples (SDXL)
+
+### Text-to-Image generation
+
+- CFG
+```
+python -m examples.text_to_img --prompt "a portrait of a dog" --method "ddim" --cfg_guidance 7.5 --model "sdxl" --img_size 1024 
+```
+
+- CFG ++
+```
+python -m examples.text_to_img --prompt "a portrait of a dog" --method "ddim_cfg++" --cfg_guidance 0.6 --model "sdxl" --img_size 1024 
+```
+
+
+### Image Inversion
+
+- CFG
+```
+python -m examples.inversion --prompt "a photography of baby fox" --method "ddim_inversion" --cfg_guidance 7.5 --model "sdxl" --img_size 1024 
+```
+
+- CFG ++
+```
+python -m examples.inversion --prompt "a photography of baby fox" --method "ddim_inverion_cfg++" --cfg_guidance 0.6 --model "sdxl" --img_size 1024 
+```
+
+### Image Editing
+
+- CFG
+```
+python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_edit" --model "sdxl" --cfg_guidance 7.5 --model "sdxl" --img_size 1024 
+```
+
+- CFG ++
+```
+python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_edit_cfg++" --model "sdxl" --cfg_guidance 0.6 --model "sdxl" --img_size 1024 
 ```
 
 ## Callback
