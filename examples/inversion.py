@@ -32,7 +32,7 @@ def main():
     parser.add_argument("--cfg_guidance", type=float, default=7.5)
     parser.add_argument("--method", type=str, default='ddim_inversion_cfg++')
     parser.add_argument("--model", type=str, default='sd15', choices=["sd15", "sd20", "sdxl"])
-    parser.add_argument("--NFE", type=int, default=50)
+    parser.add_argument("--NFE", type=int, default=10)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
