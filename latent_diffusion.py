@@ -9,10 +9,6 @@ import torch
 from diffusers import DDIMScheduler, StableDiffusionPipeline
 from tqdm import tqdm
 
-from functions.conjugate_gradient import CG
-from functions.svd_operators import A_functions as A_func
-from ldm.modules.encoders.modules import FrozenClipImageEmbedder
-
 ####### Factory #######
 __SOLVER__ = {}
 
