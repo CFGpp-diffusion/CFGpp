@@ -29,7 +29,8 @@ def main():
     solver_config = munchify({'num_sampling': args.NFE })
     callback = ComposeCallback(workdir=args.workdir,
                                frequency=1,
-                               callbacks=["draw_sds_loss", 'draw_tweedie'])
+                               callbacks=["draw_noisy", 'draw_tweedie'])
+    # callback = None
 
 
     if args.model == "sdxl":
