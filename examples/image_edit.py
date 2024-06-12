@@ -7,8 +7,8 @@ from munch import munchify
 from PIL import Image
 from torchvision.utils import save_image
 
-from solver.latent_diffusion import get_solver
-from solver.latent_sdxl import get_solver as get_solver_sdxl
+from latent_diffusion import get_solver
+from latent_sdxl import get_solver as get_solver_sdxl
 from utils.callback_util import ComposeCallback
 from utils.log_util import create_workdir, set_seed
 
