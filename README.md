@@ -54,12 +54,12 @@ python -m examples.text_to_img --prompt "a portrait of a dog" --method "ddim_cfg
 
 - CFG
 ```
-python -m examples.inversion --prompt "a photography of baby fox" --method "ddim" --cfg_guidance 7.5
+python -m examples.inversion --prompt "a photography of baby fox" --method "ddim_inversion" --cfg_guidance 7.5
 ```
 
 - CFG ++
 ```
-python -m examples.inversion --prompt "a photography of baby fox" --method "ddim_cfg++" --cfg_guidance 0.6
+python -m examples.inversion --prompt "a photography of baby fox" --method "ddim_inverion_cfg++" --cfg_guidance 0.6
 ```
 
 ### Image Editing
