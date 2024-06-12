@@ -1,6 +1,6 @@
 # CFG++ : MANIFOLD-CONSTRAINED CLASSIFIER FREE GUIDANCE FOR DIFFUSION MODELS
 
-![main figure](assets/main_figure.png)
+![main figure](assets/main_test_v5.png)
 
 ---
 ## Summary
