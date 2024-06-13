@@ -502,27 +502,6 @@ class EditWardSwapDDIM(BaseDDIM):
 
 @register_solver("ddim_cfg++")
 class BaseDDIMCFGpp(SDXL):
-    @torch.no_grad()
-    def inversion(self, z0, uc, c, cfg_guidance, add_cond_kwargs):
-        # if we use cfg_guidance=0.0 or 1.0 for inversion, add_cond_kwargs must be splitted. 
-        if cfg_guidance == 0.0 or cfg_guidance == 1.0:
-            add_cond_kwargs['text_embeds'] = add_cond_kwargs['text_embeds'][-1].unsqueeze(0)
-            add_cond_kwargs['time_ids'] = add_cond_kwargs['time_ids'][-1].unsqueeze(0)
-
-        zt = z0.clone().to(self.device)
-        pbar = tqdm(reversed(self.scheduler.timesteps), desc='DDIM inversion')
-        for _, t in enumerate(pbar):
-            at = self.alpha(t)
-            at_prev = self.alpha(t - self.skip)
-
-            noise_uc, noise_c  = self.predict_noise(zt, t, uc, c, add_cond_kwargs)
-            noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
-
-            z0t = (zt - (1-at_prev).sqrt() * noise_uc) / at_prev.sqrt()
-            zt = at.sqrt() * z0t + (1-at).sqrt() * noise_pred
-
-        return zt
-
     def reverse_process(self,
                         null_prompt_embeds,
                         prompt_embeds,
