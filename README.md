@@ -37,8 +37,6 @@ If you run one of below examples, diffusers will automatically download checkpoi
 
 ## Examples
 
-To use SDXL, add ``--model "sdxl" --img_size 1024``.
-
 ### Text-to-Image generation
 
 - CFG
@@ -67,12 +65,12 @@ python -m examples.inversion --prompt "a photography of baby fox" --method "ddim
 
 - CFG
 ```
-python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_edit" --model "sdxl" --cfg_guidance 7.5
+python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_edit" --model "sdxl" --cfg_guidance 9.0
 ```
 
 - CFG ++
 ```
-python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_edit_cfg++" --model "sdxl" --cfg_guidance 0.6
+python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_edit_cfg++" --model "sdxl" --cfg_guidance 0.8
 ```
 
 
