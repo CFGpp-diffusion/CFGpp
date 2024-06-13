@@ -61,18 +61,8 @@ python -m examples.inversion --prompt "a photography of baby fox" --method "ddim
 python -m examples.inversion --prompt "a photography of baby fox" --method "ddim_inverion_cfg++" --cfg_guidance 0.6
 ```
 
-### Image Editing
-
-- CFG
-```
-python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_edit" --model "sdxl" --cfg_guidance 9.0
-```
-
-- CFG ++
-```
-python -m examples.image_edit --src_prompt "a photography of baby fox" --tgt_prompt "a photography of a goat" --method "ddim_edit_cfg++" --model "sdxl" --cfg_guidance 0.8
-```
-
+> [!tip]
+> If you want to use SDXL, add ``--model sdxl``.
 
 ## Callback
 
