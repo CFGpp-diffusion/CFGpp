@@ -43,7 +43,6 @@ def main():
                                 cfg_guidance=args.cfg_guidance,
                                 target_size=(1024, 1024),
                                 callback_fn=callback)
-        save_image(result, args.workdir.joinpath(f'result/generated.png'), normalize=True)
 
     else:
         solver = get_solver(args.method,
