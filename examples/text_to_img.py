@@ -37,14 +37,14 @@ def main():
         solver = get_solver_sdxl(args.method,
                                  solver_config=solver_config,
                                  device=args.device)
-        for i in range(13):
-            result = solver.sample(prompt1=[args.null_prompt, args.prompt],
+
+        result = solver.sample(prompt1=[args.null_prompt, args.prompt],
                                 prompt2=[args.null_prompt, args.prompt],
                                 cfg_guidance=args.cfg_guidance,
                                 target_size=(1024, 1024),
                                 callback_fn=callback)
-            save_image(result, args.workdir.joinpath(f'result/generated.png'), normalize=True)
-            import ipdb; ipdb.set_trace()
+        save_image(result, args.workdir.joinpath(f'result/generated.png'), normalize=True)
+
     else:
         solver = get_solver(args.method,
                             solver_config=solver_config,
