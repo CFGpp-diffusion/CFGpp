@@ -74,7 +74,7 @@ Currently, we provide two options (default: None).
 
 Note that using callback may take more time due to file save. You can refer utils/callback_util.py for details.
 
-## Reference
+## Citation
 If you find our method is useful, please cite below or leave a star to this repository.
 
 ```
