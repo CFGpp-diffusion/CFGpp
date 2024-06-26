@@ -2,6 +2,9 @@
 
 ![main figure](assets/main_test_v5.png)
 
+[![Project Website](https://img.shields.io/badge/Project-Website-blue)](https://cfgpp-diffusion.github.io/)
+[![arXiv](https://img.shields.io/badge/arXiv-2311.18608-b31b1b.svg)](https://arxiv.org/abs/2406.08070)
+
 ---
 ## Summary
 
