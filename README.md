@@ -25,7 +25,7 @@ Experimental results confirm that our method significantly enhances performance 
 
 ## Setup
 
-First, create your environment. We recommand to use the following comments. 
+First, create your environment. We recommend using the following comments. 
 
 ```
 git clone https://github.com/CFGpp-diffusion/CFGpp.git
@@ -33,9 +33,9 @@ cd CFGpp
 conda env create -f environment.yaml
 ```
 
-For reproducability, using the same package version is neccessary since some dependencies lead to significant differences (for instance, diffusers). Nonetheless, improvement induced by CFG++ will be observed regardless the dependency.
+For reproducibility, using the same package version is necessary since some dependencies lead to significant differences (for instance, diffusers). Nonetheless, improvement induced by CFG++ will be observed regardless the dependency.
 
-If you run one of below examples, diffusers will automatically download checkpoints for SDv1.5 or SDXL.
+If you run one of the below examples, diffusers will automatically download checkpoints for SDv1.5 or SDXL.
 
 
 ## Examples
@@ -69,7 +69,7 @@ python -m examples.inversion --prompt "a photography of baby fox" --method "ddim
 
 ## Callback
 
-We provide callback functionality to monitor intermediate samples during diffusion reverse process. For now, the function could be called only at the end of each timestep, for the readability of scripts.
+We provide callback functionality to monitor intermediate samples during the diffusion reverse process. For now, the function could be called only at the end of each timestep, for the readability of scripts.
 
 Currently, we provide two options (default: None).
 - draw_tweedie : save $\hat x_{0|t}$ to workdir
@@ -78,10 +78,15 @@ Currently, we provide two options (default: None).
 Note that using callback may take more time due to file save. You can refer utils/callback_util.py for details.
 
 ## Citation
-If you find our method is useful, please cite below or leave a star to this repository.
+If you find our method useful, please cite as below or leave a star to this repository.
 
 ```
-coming soon
+@article{chung2024cfg++,
+  title={CFG++: Manifold-constrained Classifier Free Guidance for Diffusion Models},
+  author={Chung, Hyungjin and Kim, Jeongsol and Park, Geon Yeong and Nam, Hyelin and Ye, Jong Chul},
+  journal={arXiv preprint arXiv:2406.08070},
+  year={2024}
+}
 ```
 
 > [!note]
