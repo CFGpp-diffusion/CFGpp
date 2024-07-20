@@ -55,7 +55,7 @@ class StableDiffusion():
 
     def sample(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError("Solver must implement sample() method.")
-    
+
     def alpha(self, t):
         at = self.scheduler.alphas_cumprod[t] if t >= 0 else self.final_alpha_cumprod
         return at
@@ -121,7 +121,7 @@ class StableDiffusion():
             noise_c = noise_uc
         else:
             c_embed = torch.cat([uc, c], dim=0)
-            z_in = torch.cat([zt] * 2) 
+            z_in = torch.cat([zt] * 2)
             t_in = torch.cat([t_in] * 2)
             noise_pred = self.unet(z_in, t_in, encoder_hidden_states=c_embed)['sample']
             noise_uc, noise_c = noise_pred.chunk(2)
@@ -137,21 +137,21 @@ class StableDiffusion():
 
         # initialize z_0
         zt = z0.clone().to(self.device)
-         
+
         # loop
         pbar = tqdm(reversed(self.scheduler.timesteps), desc='DDIM Inversion')
         for _, t in enumerate(pbar):
             at = self.alpha(t)
             at_prev = self.alpha(t - self.skip)
 
-            noise_uc, noise_c = self.predict_noise(zt, t, uc, c) 
+            noise_uc, noise_c = self.predict_noise(zt, t, uc, c)
             noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
 
             z0t = (zt - (1-at_prev).sqrt() * noise_pred) / at_prev.sqrt()
             zt = at.sqrt() * z0t + (1-at).sqrt() * noise_pred
 
         return zt
-    
+
     def initialize_latent(self,
                           method: str='random',
                           src_img: Optional[torch.Tensor]=None,
@@ -169,7 +169,7 @@ class StableDiffusion():
         elif method == 'random':
             size = kwargs.get('latent_dim', (1, 4, 64, 64))
             z = torch.randn(size).to(self.device)
-        else: 
+        else:
             raise NotImplementedError
 
         return z.requires_grad_()
@@ -185,7 +185,7 @@ class BaseDDIM(StableDiffusion):
     Useful for text-to-image generation
     """
 
-    @torch.autocast(device_type='cuda', dtype=torch.float16) 
+    @torch.autocast(device_type='cuda', dtype=torch.float16)
     def sample(self,
                cfg_guidance=7.5,
                prompt=["",""],
@@ -195,7 +195,7 @@ class BaseDDIM(StableDiffusion):
         Main function that defines each solver.
         This will generate samples without considering measurements.
         """
-        
+
         # Text embedding
         uc, c = self.get_text_embed(null_prompt=prompt[0], prompt=prompt[1])
 
@@ -212,7 +212,7 @@ class BaseDDIM(StableDiffusion):
             with torch.no_grad():
                 noise_uc, noise_c = self.predict_noise(zt, t, uc, c)
                 noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
-            
+
             # tweedie
             z0t = (zt - (1-at).sqrt() * noise_pred) / at.sqrt()
 
@@ -226,7 +226,7 @@ class BaseDDIM(StableDiffusion):
                 callback_kwargs = callback_fn(step, t, callback_kwargs)
                 z0t = callback_kwargs["z0t"]
                 zt = callback_kwargs["zt"]
-        
+
         # for the last step, do not add noise
         img = self.decode(z0t)
         img = (img / 2 + 0.5).clamp(0, 1)
@@ -238,14 +238,14 @@ class InversionDDIM(BaseDDIM):
     Editing via WardSwap after inversion.
     Useful for text-guided image editing.
     """
-    @torch.autocast(device_type='cuda', dtype=torch.float16) 
+    @torch.autocast(device_type='cuda', dtype=torch.float16)
     def sample(self,
                src_img,
                cfg_guidance=7.5,
                prompt=["","",""],
                callback_fn=None,
                **kwargs):
-        
+
         # Text embedding
         uc, c = self.get_text_embed(null_prompt=prompt[0], prompt=prompt[1])
 
@@ -266,7 +266,7 @@ class InversionDDIM(BaseDDIM):
             with torch.no_grad():
                 noise_uc, noise_c = self.predict_noise(zt, t, uc, c)
                 noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
-            
+
             # tweedie
             z0t = (zt - (1-at).sqrt() * noise_pred) / at.sqrt()
 
@@ -280,7 +280,7 @@ class InversionDDIM(BaseDDIM):
                 callback_kwargs = callback_fn(step, t, callback_kwargs)
                 z0t = callback_kwargs["z0t"]
                 zt = callback_kwargs["zt"]
-        
+
         # for the last step, do not add noise
         img = self.decode(z0t)
         img = (img / 2 + 0.5).clamp(0, 1)
@@ -292,14 +292,14 @@ class EditWardSwapDDIM(InversionDDIM):
     Editing via WardSwap after inversion.
     Useful for text-guided image editing.
     """
-    @torch.autocast(device_type='cuda', dtype=torch.float16) 
+    @torch.autocast(device_type='cuda', dtype=torch.float16)
     def sample(self,
                src_img,
                cfg_guidance=7.5,
                prompt=["","",""],
                callback_fn=None,
                **kwargs):
-        
+
         # Text embedding
         uc, src_c = self.get_text_embed(null_prompt=prompt[0], prompt=prompt[1])
         _, tgt_c = self.get_text_embed(null_prompt=prompt[0], prompt=prompt[2])
@@ -319,13 +319,13 @@ class EditWardSwapDDIM(InversionDDIM):
             with torch.no_grad():
                 noise_uc, noise_c = self.predict_noise(zt, t, uc, tgt_c)
                 noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
-            
+
             # tweedie
             z0t = (zt - (1-at).sqrt() * noise_pred) / at.sqrt()
 
             # add noise
             zt = at_prev.sqrt() * z0t + (1-at_prev).sqrt() * noise_pred
-        
+
             if callback_fn is not None:
                 callback_kwargs = {'z0t': z0t.detach(),
                                     'zt': zt.detach(),
@@ -356,7 +356,7 @@ class BaseDDIMCFGpp(StableDiffusion):
                  **kwargs):
         super().__init__(solver_config, model_key, device, **kwargs)
 
-    @torch.autocast(device_type='cuda', dtype=torch.float16) 
+    @torch.autocast(device_type='cuda', dtype=torch.float16)
     def sample(self,
                cfg_guidance=7.5,
                prompt=["",""],
@@ -366,7 +366,7 @@ class BaseDDIMCFGpp(StableDiffusion):
         Main function that defines each solver.
         This will generate samples without considering measurements.
         """
-        
+
         # Text embedding
         uc, c = self.get_text_embed(null_prompt=prompt[0], prompt=prompt[1])
 
@@ -383,7 +383,7 @@ class BaseDDIMCFGpp(StableDiffusion):
             with torch.no_grad():
                 noise_uc, noise_c = self.predict_noise(zt, t, uc, c)
                 noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
-            
+
             # tweedie
             z0t = (zt - (1-at).sqrt() * noise_pred) / at.sqrt()
 
@@ -397,7 +397,7 @@ class BaseDDIMCFGpp(StableDiffusion):
                 callback_kwargs = callback_fn(step, t, callback_kwargs)
                 z0t = callback_kwargs["z0t"]
                 zt = callback_kwargs["zt"]
-        
+
         # for the last step, do not add noise
         img = self.decode(z0t)
         img = (img / 2 + 0.5).clamp(0, 1)
@@ -418,14 +418,14 @@ class InversionDDIMCFGpp(BaseDDIMCFGpp):
 
         # initialize z_0
         zt = z0.clone().to(self.device)
-         
+
         # loop
         pbar = tqdm(reversed(self.scheduler.timesteps), desc='DDIM Inversion')
         for _, t in enumerate(pbar):
             at = self.alpha(t)
             at_prev = self.alpha(t-self.skip)
 
-            noise_uc, noise_c = self.predict_noise(zt, t, uc, c) 
+            noise_uc, noise_c = self.predict_noise(zt, t, uc, c)
             noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
 
             z0t = (zt - (1-at_prev).sqrt() * noise_uc) / at_prev.sqrt()
@@ -433,14 +433,14 @@ class InversionDDIMCFGpp(BaseDDIMCFGpp):
 
         return zt
 
-    @torch.autocast(device_type='cuda', dtype=torch.float16) 
+    @torch.autocast(device_type='cuda', dtype=torch.float16)
     def sample(self,
                src_img,
                cfg_guidance=7.5,
                prompt=["",""],
                callback_fn=None,
                **kwargs):
-        
+
         # Text embedding
         uc, c = self.get_text_embed(null_prompt=prompt[0], prompt=prompt[1])
 
@@ -460,7 +460,7 @@ class InversionDDIMCFGpp(BaseDDIMCFGpp):
             with torch.no_grad():
                 noise_uc, noise_c = self.predict_noise(zt, t, uc, c)
                 noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
-            
+
             # tweedie
             z0t = (zt - (1-at).sqrt() * noise_pred) / at.sqrt()
 
@@ -474,7 +474,7 @@ class InversionDDIMCFGpp(BaseDDIMCFGpp):
                 callback_kwargs = callback_fn(step, t, callback_kwargs)
                 z0t = callback_kwargs["z0t"]
                 zt = callback_kwargs["zt"]
-        
+
         # for the last step, do not add noise
         img = self.decode(z0t)
         img = (img / 2 + 0.5).clamp(0, 1)
@@ -486,14 +486,14 @@ class EditWardSwapDDIMCFGpp(InversionDDIMCFGpp):
     Editing via WardSwap after inversion.
     Useful for text-guided image editing.
     """
-    @torch.autocast(device_type='cuda', dtype=torch.float16) 
+    @torch.autocast(device_type='cuda', dtype=torch.float16)
     def sample(self,
                src_img,
                cfg_guidance=7.5,
                prompt=["","",""],
                callback_fn=None,
                **kwargs):
-        
+
         # Text embedding
         uc, src_c = self.get_text_embed(null_prompt=prompt[0], prompt=prompt[1])
         _, tgt_c = self.get_text_embed(null_prompt=prompt[0], prompt=prompt[2])
@@ -513,13 +513,13 @@ class EditWardSwapDDIMCFGpp(InversionDDIMCFGpp):
             with torch.no_grad():
                 noise_uc, noise_c = self.predict_noise(zt, t, uc, tgt_c)
                 noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
-            
+
             # tweedie
             z0t = (zt - (1-at).sqrt() * noise_pred) / at.sqrt()
 
             # add noise
             zt = at_prev.sqrt() * z0t + (1-at_prev).sqrt() * noise_uc
-        
+
             if callback_fn is not None:
                 callback_kwargs = {'z0t': z0t.detach(),
                                     'zt': zt.detach(),
@@ -539,4 +539,4 @@ class EditWardSwapDDIMCFGpp(InversionDDIMCFGpp):
 if __name__ == "__main__":
     # print all list of solvers
     print(f"Possble solvers: {[x for x in __SOLVER__.keys()]}")
-    
+
