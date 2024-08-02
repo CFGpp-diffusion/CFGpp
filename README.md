@@ -28,6 +28,7 @@ We propose a simple fix to this seemingly inherent limitation and propose **CFG+
 Experimental results confirm that our method significantly enhances performance in **text-to-image generation, DDIM inversion, editing, and solving inverse problems**, suggesting a wide-ranging impact and potential applications in various fields that utilize text guidance.
 
 ## 🗓 ️News
+- [20 Jul 2024] 🚨[Stable Diffusion WebUI reForge](https://github.com/Panchovix/stable-diffusion-webui-reForge) now supports CFG++. Thanks to the awesome work! Please checkout the [Reddit discussion](https://www.reddit.com/r/StableDiffusion/comments/1e7enng/reforge_updates_new_samplers_new_scheduler_more/) for more details.
 - [22 Jun 2024] 🚨[ComfyUI](https://openart.ai/workflows/dugumatai/new-sampler-euler_cfg/oGP4a011iYE2UpeTtXNH) now supports CFG++. Thanks to the awesome work of [@NotEvilGirl](https://gitea.com/NotEvilGirl/cfgpp)! For more details, please check out the [Reddit discussion](https://www.reddit.com/r/StableDiffusion/comments/1dohy20/quick_overview_of_some_newish_stuff_in_comfyui/) and [Youtube video](https://www.youtube.com/watch?v=-GXJDz8i-Wo).
 - [12 Jun 2024] Code and paper are uploaded.
 
