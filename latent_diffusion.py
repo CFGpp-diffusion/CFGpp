@@ -479,6 +479,14 @@ class DPMpp2mCFGppSolver(StableDiffusion):
                 extra2 = torch.exp(-h) * x
                 x = denoised + extra1 + extra2
             old_denoised = uncond_denoised
+
+            if callback_fn is not None:
+                callback_kwargs = { 'z0t': denoised.detach(),
+                                    'zt': x.detach(),
+                                    'decode': self.decode}
+                callback_kwargs = callback_fn(i, new_t, callback_kwargs)
+                denoised = callback_kwargs["z0t"]
+                x = callback_kwargs["zt"]
         
         # for the last step, do not add noise
         img = self.decode(x)
