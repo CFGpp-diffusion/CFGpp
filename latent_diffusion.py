@@ -43,6 +43,7 @@ class StableDiffusion():
         self.unet = pipe.unet
 
         self.scheduler = DDIMScheduler.from_pretrained(model_key, subfolder="scheduler")
+        self.total_alphas = self.scheduler.alphas_cumprod.clone()
         total_timesteps = len(self.scheduler.timesteps)
         self.scheduler.set_timesteps(solver_config.num_sampling, device=device)
         self.skip = total_timesteps // solver_config.num_sampling
@@ -338,6 +339,88 @@ class EditWardSwapDDIM(InversionDDIM):
         img = self.decode(z0t)
         img = (img / 2 + 0.5).clamp(0, 1)
         return img.detach().cpu()
+
+
+@register_solver("dpm++_2m_cfgpp")
+class DPMpp2mCFGppSolver(StableDiffusion):
+    '''
+    Modified from the codebase of A1111
+    '''
+    quantize = True
+
+    def sigma_to_t(self, sigma, quantize=None):
+        '''Taken from k_diffusion/external.py'''
+        quantize = self.quantize if quantize is None else quantize
+        total_sigmas = (1-self.total_alphas).sqrt() / self.total_alphas.sqrt()
+        dists = sigma - total_sigmas[:, None]
+        if quantize:
+            return dists.abs().argmin(dim=0).view(sigma.shape)
+        low_idx = dists.ge(0).cumsum(dim=0).argmax(dim=0).clamp(max=total_sigmas.shape[0] - 2)
+        high_idx = low_idx + 1
+        low, high = total_sigmas[low_idx], total_sigmas[high_idx]
+        w = (low - sigma) / (low - high)
+        w = w.clamp(0, 1)
+        t = (1 - w) * low_idx + w * high_idx
+        return t.view(sigma.shape)
+
+    def to_d(self, x, sigma, denoised):
+        '''converts a denoiser output to a Karras ODE derivative'''
+        return (x - denoised) / sigma.item()
+
+    def sample(self, cfg_guidance, prompt=["", ""], callback_fn=None, **kwargs):
+        # Text embedding
+        uc, c = self.get_text_embed(null_prompt=prompt[0], prompt=prompt[1])
+
+        # perpare alphas and sigmas
+        alphas = self.scheduler.alphas_cumprod[self.scheduler.timesteps.cpu()]
+        sigmas = (1-alphas).sqrt() / alphas.sqrt()
+        # initialize
+        x = self.initialize_latent(method="random",
+                                   latent_dim=(1, 4, 64, 64)).to(torch.float16)
+        x = x*sigmas[0]
+
+        t_fn = lambda sigma: sigma.log().neg()
+        old_denoised = None  # initial value
+
+        # Sampling
+        pbar = tqdm(self.scheduler.timesteps[:-1], desc="SD")
+        for i, _ in enumerate(pbar):
+            at = alphas[i]
+            sigma = sigmas[i]
+
+            c_in = at.clone().sqrt()
+            c_out = -sigma.clone()
+
+            # TODO: check here, if it is correct -> wrong. time should be 0~1000, but this is 0~50.
+            new_t = self.sigma_to_t(sigma).to(self.device)
+            # new_t = self.scheduler.timesteps[i]
+
+            with torch.no_grad():
+                noise_uc, noise_c = self.predict_noise(x*c_in, new_t, uc, c)
+                noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
+
+            # tweedie's formula, VE version
+            denoised = x + c_out * noise_pred
+            uncond_denoised = x + c_out * noise_uc
+
+            # solve ODE one step
+            t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i+1])
+            h = t_next - t
+            if old_denoised is None or sigmas[i+1] == 0:
+                x = denoised + self.to_d(x, sigmas[i], uncond_denoised) * sigmas[i+1]
+            else:
+                h_last = t - t_fn(sigmas[i-1])
+                r = h_last / h
+                extra1 = -torch.exp(-h) * uncond_denoised - (-h).expm1() * (uncond_denoised - old_denoised) / (2*r)
+                extra2 = torch.exp(-h) * x
+                x = denoised + extra1 + extra2
+            old_denoised = uncond_denoised
+        
+        # for the last step, do not add noise
+        img = self.decode(x)
+        img = (img / 2 + 0.5).clamp(0, 1)
+        return img.detach().cpu()
+
 
 ###########################################
 # CFG++ version
