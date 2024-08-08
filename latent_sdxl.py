@@ -51,6 +51,7 @@ class SDXL():
 
         # sampling parameters
         self.scheduler = DDIMScheduler.from_pretrained(model_key, subfolder="scheduler")
+        self.total_alphas = self.scheduler.alphas_cumprod.clone()
         N_ts = len(self.scheduler.timesteps)
         self.scheduler.set_timesteps(solver_config.num_sampling, device=device)
         self.skip = N_ts // solver_config.num_sampling
@@ -543,6 +544,97 @@ class BaseDDIMCFGpp(SDXL):
 
         # for the last stpe, do not add noise
         return z0t
+
+@register_solver('dpm++_2m_cfgpp')
+class DPMpp2mCFGppSolver(SDXL):
+    quantize = True
+
+    def sigma_to_t(self, sigma, quantize=None):
+        '''Taken from k_diffusion/external.py'''
+        quantize = self.quantize if quantize is None else quantize
+        total_sigmas = (1-self.total_alphas).sqrt() / self.total_alphas.sqrt()
+        dists = sigma - total_sigmas[:, None]
+        if quantize:
+            return dists.abs().argmin(dim=0).view(sigma.shape)
+        low_idx = dists.ge(0).cumsum(dim=0).argmax(dim=0).clamp(max=total_sigmas.shape[0] - 2)
+        high_idx = low_idx + 1
+        low, high = total_sigmas[low_idx], total_sigmas[high_idx]
+        w = (low - sigma) / (low - high)
+        w = w.clamp(0, 1)
+        t = (1 - w) * low_idx + w * high_idx
+        return t.view(sigma.shape)
+
+    def to_d(self, x, sigma, denoised):
+        '''converts a denoiser output to a Karras ODE derivative'''
+        return (x - denoised) / sigma.item()
+
+    @torch.autocast("cuda")
+    def reverse_process(self,
+                        null_prompt_embeds,
+                        prompt_embeds,
+                        cfg_guidance,
+                        add_cond_kwargs,
+                        shape=(1024, 1024),
+                        callback_fn=None,
+                        **kwargs):
+        #################################
+        # Sample region - where to change
+        #################################
+
+        # prepare alphas and sigmas
+        alphas = self.scheduler.alphas_cumprod[self.scheduler.timesteps.cpu()]
+        sigmas = (1-alphas).sqrt() / alphas.sqrt()
+
+        # initialize 
+        x = self.initialize_latent(method='random',
+                                   size=(1, 4, shape[1] // self.vae_scale_factor, shape[0] // self.vae_scale_factor)).to(torch.float16)
+        x = x * sigmas[0]
+        
+        t_fn = lambda sigma: sigma.log().neg()
+        old_denoised = None  # initial value
+
+        # sampling
+        pbar = tqdm(self.scheduler.timesteps[:-1], desc='SDXL')
+        for i, _ in enumerate(pbar):
+            at = alphas[i]
+            sigma = sigmas[i]
+
+            c_in = at.clone().sqrt()
+            c_out = -sigma.clone()
+
+            new_t = self.sigma_to_t(sigma).to(self.device)
+
+            with torch.no_grad():
+                noise_uc, noise_c = self.predict_noise(x * c_in, new_t, null_prompt_embeds, prompt_embeds, add_cond_kwargs)
+                noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
+            
+            # tweedie, VE version
+            denoised = x + c_out * noise_pred
+            uncond_denoised = x + c_out * noise_uc
+
+            # solve ODE one step
+            t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i+1])
+            h = t_next - t
+            if old_denoised is None or sigmas[i+1] == 0:
+                x = denoised + self.to_d(x, sigmas[i], uncond_denoised) * sigmas[i+1]
+            else:
+                h_last = t - t_fn(sigmas[i-1])
+                r = h_last / h
+                extra1 = -torch.exp(-h) * uncond_denoised - (-h).expm1() * (uncond_denoised - old_denoised) / (2*r)
+                extra2 = torch.exp(-h) * x
+                x = denoised + extra1 + extra2
+            old_denoised = uncond_denoised
+
+            if callback_fn is not None:
+                callback_kwargs = { 'z0t': denoised.detach(),
+                                    'zt': x.detach(),
+                                    'decode': self.decode}
+                callback_kwargs = callback_fn(i, new_t, callback_kwargs)
+                denoised = callback_kwargs["z0t"]
+                x = callback_kwargs["zt"]
+
+        # for the last stpe, do not add noise
+        return x
 
 @register_solver("ddim_edit_cfg++")
 class EditWardSwapDDIMCFGpp(EditWardSwapDDIM):
