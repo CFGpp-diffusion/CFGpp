@@ -16,7 +16,7 @@ from utils.log_util import create_workdir, set_seed
 def load_img(img_path: str, size: int=512, centered:bool=True):
     image = np.array(Image.open(img_path).convert('RGB').resize((size, size)))
     image = torch.from_numpy(image).permute(2, 0, 1)
-    if centered: 
+    if centered:
         image = image / 127.5 - 1  # [0, 1] -> [-1, 1]
     image = image.unsqueeze(0)
     return image
@@ -40,32 +40,18 @@ def main():
     create_workdir(args.workdir)
 
     solver_config = munchify({'num_sampling': args.NFE})
-    # callback = ComposeCallback(workdir=args.workdir,
-    #                            callbacks=["draw_tweedie", "draw_noisy"])
     callback = None
-
     img = load_img(args.img_path, size=args.img_size)
 
-    if args.model == "sdxl":
-        solver = get_solver_sdxl(args.method,
-                                 solver_config=solver_config,
-                                 device=args.device)
-        result = solver.sample(prompt1=[args.null_prompt, args.prompt],
-                               prompt2=[args.null_prompt, args.prompt],
-                               src_img=img,
-                               cfg_guidance=args.cfg_guidance,
-                               target_size=(1024, 1024),
-                               callback_fn=callback)
-    else:
-        solver = get_solver(args.method,
-                            solver_config=solver_config,
-                            device=args.device)
-        result = solver.sample(prompt=[args.null_prompt, args.prompt],
-                               src_img=img,
-                               cfg_guidance=args.cfg_guidance,
-                               callback_fn=callback)
+    solver = get_solver(args.method,
+                        solver_config=solver_config,
+                        device=args.device)
+    result = solver.sample(prompt=[args.null_prompt, args.prompt],
+                            src_img=img,
+                            cfg_guidance=args.cfg_guidance,
+                            callback_fn=callback)
 
-    
+
     save_image(result, args.workdir.joinpath(f'result/reconstruct.png'), normalize=True)
 
 if __name__ == "__main__":
