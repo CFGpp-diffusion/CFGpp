@@ -29,7 +29,8 @@ Experimental results confirm that our method significantly enhances performance 
 
 ## 🗓 ️News
 - [20 Jul 2024] 🚨[Stable Diffusion WebUI reForge](https://github.com/Panchovix/stable-diffusion-webui-reForge) now supports CFG++. Thanks to the awesome work! Please checkout the [Reddit discussion](https://www.reddit.com/r/StableDiffusion/comments/1e7enng/reforge_updates_new_samplers_new_scheduler_more/) for more details.
-- [22 Jun 2024] 🚨[ComfyUI](https://openart.ai/workflows/dugumatai/new-sampler-euler_cfg/oGP4a011iYE2UpeTtXNH) now supports CFG++. Thanks to the awesome work of [@NotEvilGirl](https://gitea.com/NotEvilGirl/cfgpp)! For more details, please check out the [Reddit discussion](https://www.reddit.com/r/StableDiffusion/comments/1dohy20/quick_overview_of_some_newish_stuff_in_comfyui/) and [Youtube video](https://www.youtube.com/watch?v=-GXJDz8i-Wo).
+- [22 Jun 2024] 🚨[ComfyUI](https://openart.ai/workflows/dugumatai/new-sampler-euler_cfg/oGP4a011iYE2UpeTtXNH) now supports CFG++. Thanks to the awesome work of [@dugumatai](https://openart.ai/workflows/profile/dugumatai?sort=latest) and [@NotEvilGirl](https://gitea.com/NotEvilGirl/cfgpp)! We *strongly* encourage to test this workflow as CFG++ may improve the sampling with student models, e.g. SDXL-lightning, to a significant extent. 
+  - For more details, please check out the [Reddit discussion](https://www.reddit.com/r/StableDiffusion/comments/1dohy20/quick_overview_of_some_newish_stuff_in_comfyui/) and [Youtube video](https://www.youtube.com/watch?v=-GXJDz8i-Wo).
 - [12 Jun 2024] Code and paper are uploaded.
 
 ## 🛠️ Setup
@@ -43,7 +44,7 @@ conda env create -f environment.yaml
 
 For reproducibility, using the same package version is necessary since some dependencies lead to significant differences (for instance, diffusers). Nonetheless, improvement induced by CFG++ will be observed regardless the dependency.
 
-If you run one of the below examples, diffusers will automatically download checkpoints for SDv1.5 or SDXL.
+Diffusers will automatically download checkpoints for SDv1.5 or SDXL. For the fast sampling, we also support SDXL-lightning. See T2I examples below. 
 
 
 ## 🌄 Examples
@@ -55,10 +56,25 @@ If you run one of the below examples, diffusers will automatically download chec
 python -m examples.text_to_img --prompt "a portrait of a dog" --method "ddim" --cfg_guidance 7.5
 ```
 
-- CFG ++
+- CFG++
+We support DDIM CFG++ (ddim_cfg++) and DPM++ 2M CFG++ (dpm++_2m_cfgpp) at this moment. Please refer to [Auto1111 reForge](https://github.com/Panchovix/stable-diffusion-webui-reForge/blob/main/ldm_patched/k_diffusion/sampling.py#L1161) and [ComfyUI](https://openart.ai/workflows/dugumatai/new-sampler-euler_cfg/oGP4a011iYE2UpeTtXNH) for the other samplers, e.g. Euler-a CFG++, DPM++ SDE CFG++, etc.
 ```
-python -m examples.text_to_img --prompt "a portrait of a dog" --method "ddim_cfg++" --cfg_guidance 0.6
+python -m examples.text_to_img --prompt "a portrait of a dog" --method "ddim_cfg++" --cfg_guidance 0.6 
 ```
+
+- CFG++ (SDXL-lightning)
+
+First, download [sdxl_lightning_4step_unet.safetensors](https://huggingface.co/ByteDance/SDXL-Lightning/tree/main) in ```ckpt```. Then run the test below. 
+
+```
+python -m examples.text_to_img --prompt "stars, water, brilliantly, gorgeous large scale scene, a little girl, in the style of dreamy realism, light gold and amber, blue and pink, brilliantly illuminated in the background." --method "ddim_cfg++_lightning" --model "sdxl_lightning" --cfg_guidance 1 --NFE 4
+```
+  - You can test other NFEs with different safetensors (e.g., 8step_unet). Make sure to modify the ```--NFE``` accordingly. 
+
+  - SDXL-lightning already distilled the score with pre-fixed CFG scale. Therefore, we set ```--cfg_guidance 1```. That said, the key difference lies in the renoising step.
+
+  - For the Lightning with original DDIM, run above with ```--method "ddim_lightning"```
+
 
 ### Image Inversion
 
@@ -67,7 +83,7 @@ python -m examples.text_to_img --prompt "a portrait of a dog" --method "ddim_cfg
 python -m examples.inversion --prompt "a photography of baby fox" --method "ddim_inversion" --cfg_guidance 7.5
 ```
 
-- CFG ++
+- CFG++
 ```
 python -m examples.inversion --prompt "a photography of baby fox" --method "ddim_inversion_cfg++" --cfg_guidance 0.6
 ```
