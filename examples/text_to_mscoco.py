@@ -14,7 +14,7 @@ from utils.log_util import create_workdir, set_seed
 def main():
     parser = argparse.ArgumentParser(description="Latent Diffusion")
     parser.add_argument("--workdir", type=Path, default="examples/workdir/mscoco")
-    parser.add_argument('--prompt_dir', type=Path, default=Path('/home/user/research/dataset/mscoco/coco_v2.txt'))
+    parser.add_argument('--prompt_dir', type=Path, default=Path('examples/assets/coco_v2.txt'))
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--null_prompt", type=str, default="")
     parser.add_argument("--prompt", type=str, default="")
@@ -36,7 +36,7 @@ def main():
             stripped_line = line.strip()
             if stripped_line:  # Only add non-empty lines
                 text_list.append(stripped_line)
-    text_list = text_list[:10000]
+    text_list = text_list[:10000] # Test for 10k MS-COCO validation
 
 
     solver_config = munchify({'num_sampling': args.NFE })
