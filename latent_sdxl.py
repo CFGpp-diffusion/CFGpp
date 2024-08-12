@@ -618,7 +618,7 @@ class BaseDDIMCFGpp(SDXL):
         return z0t
 
 @register_solver('ddim_cfg++_lightning')
-class BaseDDIMCFGppLight(BaseDDIM, SDXLLightning):
+class BaseDDIMCFGppLight(BaseDDIMCFGpp, SDXLLightning):
     def __init__(self, **kwargs):
         SDXLLightning.__init__(self, **kwargs)
     
