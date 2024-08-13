@@ -829,44 +829,28 @@ class DPMpp2sAncestralCFGppSolver(StableDiffusion):
 
 @register_solver("dpm++_2m_cfg++")
 class DPMpp2mCFGppSolver(StableDiffusion):
-    '''
-    Modified from the codebase of A1111
-    '''
-    quantize = True
-
+    @torch.autocast(device_type='cuda', dtype=torch.float16)
     def sample(self, cfg_guidance, prompt=["", ""], callback_fn=None, **kwargs):
+        t_fn = lambda sigma: sigma.log().neg()
+        sigma_fn = lambda t: t.neg().exp()
         # Text embedding
         uc, c = self.get_text_embed(null_prompt=prompt[0], prompt=prompt[1])
-
-        # perpare alphas and sigmas
-        alphas = self.scheduler.alphas_cumprod[self.scheduler.timesteps.cpu()]
-        sigmas = (1-alphas).sqrt() / alphas.sqrt()
+        # convert to karras sigma scheduler
+        total_sigmas = (1-self.total_alphas).sqrt() / self.total_alphas.sqrt()
+        sigmas = get_sigmas_karras(len(self.scheduler.timesteps), total_sigmas.min(), total_sigmas.max(), rho=7.)
         # initialize
-        x = self.initialize_latent(method="random",
-                                   latent_dim=(1, 4, 64, 64)).to(torch.float16)
-        x = x*sigmas[0]
-
-        t_fn = lambda sigma: sigma.log().neg()
-        old_denoised = None  # initial value
-
+        x = self.initialize_latent(method="random_kdiffusion",
+                                   latent_dim=(1, 4, 64, 64),
+                                   sigmas=sigmas).to(torch.float16)
+        old_denoised = None # buffer
         # Sampling
-        pbar = tqdm(self.scheduler.timesteps[:-1], desc="SD")
+        pbar = tqdm(self.scheduler.timesteps, desc="SD")
         for i, _ in enumerate(pbar):
-            at = alphas[i]
             sigma = sigmas[i]
-
-            c_in = at.clone().sqrt()
-            c_out = -sigma.clone()
-
             new_t = self.timestep(sigma).to(self.device)
-
+            
             with torch.no_grad():
-                noise_uc, noise_c = self.predict_noise(x*c_in, new_t, uc, c)
-                noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
-
-            # tweedie's formula, VE version
-            denoised = x + c_out * noise_pred
-            uncond_denoised = x + c_out * noise_uc
+                denoised, uncond_denoised = self.kdiffusion_x_to_denoised(x, sigma, uc, c, cfg_guidance, new_t)
 
             # solve ODE one step
             t, t_next = t_fn(sigmas[i]), t_fn(sigmas[i+1])
@@ -876,7 +860,7 @@ class DPMpp2mCFGppSolver(StableDiffusion):
             else:
                 h_last = t - t_fn(sigmas[i-1])
                 r = h_last / h
-                extra1 = -torch.exp(-h) * uncond_denoised - (-h).expm1() * (uncond_denoised - old_denoised) / (2*r)
+                extra1 = -torch.exp(-h) * uncond_denoised - (-h).expm1() * (denoised - old_denoised) / (2*r)
                 extra2 = torch.exp(-h) * x
                 x = denoised + extra1 + extra2
             old_denoised = uncond_denoised
