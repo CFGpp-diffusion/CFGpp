@@ -858,7 +858,7 @@ class DPMpp2mCFGppSolver(StableDiffusion):
             c_in = at.clone().sqrt()
             c_out = -sigma.clone()
 
-            new_t = self.sigma_to_t(sigma).to(self.device)
+            new_t = self.timestep(sigma).to(self.device)
 
             with torch.no_grad():
                 noise_uc, noise_c = self.predict_noise(x*c_in, new_t, uc, c)
