@@ -1,7 +1,9 @@
 from typing import Any, Optional, Tuple
+import os
+from safetensors.torch import load_file
 
 import torch
-from diffusers import AutoencoderKL, DDIMScheduler, StableDiffusionXLPipeline
+from diffusers import AutoencoderKL, DDIMScheduler, StableDiffusionXLPipeline, UNet2DConditionModel, EulerDiscreteScheduler
 from diffusers.models.attention_processor import (AttnProcessor2_0,
                                                   LoRAAttnProcessor2_0,
                                                   LoRAXFormersAttnProcessor,
@@ -309,6 +311,54 @@ class SDXL():
     def reverse_process(self, *args, **kwargs):
         raise NotImplementedError
 
+
+class SDXLLightning(SDXL):
+    def __init__(self, 
+                 solver_config: dict,
+                 base_model_key:str="stabilityai/stable-diffusion-xl-base-1.0",
+                 light_model_ckpt:str="ckpt/sdxl_lightning_4step_unet.safetensors",
+                 dtype=torch.float16,
+                 device='cuda'):
+
+        self.device = device
+
+        # load the student model
+        unet = UNet2DConditionModel.from_config(base_model_key, subfolder="unet").to("cuda", torch.float16)
+        ext = os.path.splitext(light_model_ckpt)[1]
+        if ext == ".safetensors":
+            state_dict = load_file(light_model_ckpt)
+        else:
+            state_dict = torch.load(light_model_ckpt, map_location="cpu")
+        print(unet.load_state_dict(state_dict, strict=True))
+        unet.requires_grad_(False)
+        self.unet = unet
+
+        #pipe2 = StableDiffusionXLPipeline.from_single_file(light_model_ckpt, torch_dtype=dtype).to(device)
+        pipe = StableDiffusionXLPipeline.from_pretrained(base_model_key, unet=self.unet, torch_dtype=dtype).to(device)
+        self.dtype = dtype
+
+        # avoid overflow in float16
+        self.vae = AutoencoderKL.from_pretrained("madebyollin/sdxl-vae-fp16-fix", torch_dtype=dtype).to(device)
+
+        self.tokenizer_1 = pipe.tokenizer
+        self.tokenizer_2 = pipe.tokenizer_2
+        self.text_enc_1 = pipe.text_encoder
+        self.text_enc_2 = pipe.text_encoder_2
+
+        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
+        self.default_sample_size = self.unet.config.sample_size
+
+        # sampling parameters
+        self.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, timestep_spacing="trailing")
+        self.total_alphas = self.scheduler.alphas_cumprod.clone()
+        N_ts = len(self.scheduler.timesteps)
+        self.scheduler.set_timesteps(solver_config.num_sampling, device=device)
+        self.skip = N_ts // solver_config.num_sampling
+
+        #self.final_alpha_cumprod = self.scheduler.final_alpha_cumprod.to(device)
+        self.scheduler.alphas_cumprod = torch.cat([torch.tensor([1.0]), self.scheduler.alphas_cumprod]).to(device)
+
+
 ###########################################
 # Base version
 ###########################################
@@ -330,7 +380,7 @@ class BaseDDIM(SDXL):
         zt = self.initialize_latent(size=(1, 4, shape[1] // self.vae_scale_factor, shape[0] // self.vae_scale_factor))
         
         # sampling
-        pbar = tqdm(self.scheduler.timesteps, desc='SDXL')
+        pbar = tqdm(self.scheduler.timesteps.int(), desc='SDXL')
         for step, t in enumerate(pbar):
             next_t = t - self.skip
             at = self.scheduler.alphas_cumprod[t]
@@ -356,6 +406,28 @@ class BaseDDIM(SDXL):
 
         # for the last stpe, do not add noise
         return z0t
+
+@register_solver('ddim_lightning')
+class BaseDDIMLight(BaseDDIM, SDXLLightning):
+    def __init__(self, **kwargs):
+        SDXLLightning.__init__(self, **kwargs)
+    
+    def reverse_process(self,
+                        null_prompt_embeds,
+                        prompt_embeds,
+                        cfg_guidance,
+                        add_cond_kwargs,
+                        shape=(1024, 1024),
+                        callback_fn=None,
+                        **kwargs):
+        assert cfg_guidance == 1.0, "CFG should be turned off in the lightning version"
+        return super().reverse_process(null_prompt_embeds, 
+                                        prompt_embeds, 
+                                        cfg_guidance, 
+                                        add_cond_kwargs, 
+                                        shape, 
+                                        callback_fn, 
+                                        **kwargs)
 
 @register_solver("ddim_edit")
 class EditWardSwapDDIM(BaseDDIM):
@@ -518,7 +590,7 @@ class BaseDDIMCFGpp(SDXL):
         zt = self.initialize_latent(size=(1, 4, shape[1] // self.vae_scale_factor, shape[0] // self.vae_scale_factor))
         
         # sampling
-        pbar = tqdm(self.scheduler.timesteps, desc='SDXL')
+        pbar = tqdm(self.scheduler.timesteps.int(), desc='SDXL')
         for step, t in enumerate(pbar):
             next_t = t - self.skip
             at = self.scheduler.alphas_cumprod[t]
@@ -544,6 +616,28 @@ class BaseDDIMCFGpp(SDXL):
 
         # for the last stpe, do not add noise
         return z0t
+
+@register_solver('ddim_cfg++_lightning')
+class BaseDDIMCFGppLight(BaseDDIMCFGpp, SDXLLightning):
+    def __init__(self, **kwargs):
+        SDXLLightning.__init__(self, **kwargs)
+    
+    def reverse_process(self,
+                        null_prompt_embeds,
+                        prompt_embeds,
+                        cfg_guidance,
+                        add_cond_kwargs,
+                        shape=(1024, 1024),
+                        callback_fn=None,
+                        **kwargs):
+        assert cfg_guidance == 1.0, "CFG should be turned off in the lightning version"
+        return super().reverse_process(null_prompt_embeds, 
+                                        prompt_embeds, 
+                                        cfg_guidance, 
+                                        add_cond_kwargs, 
+                                        shape, 
+                                        callback_fn, 
+                                        **kwargs)
 
 @register_solver('dpm++_2m_cfgpp')
 class DPMpp2mCFGppSolver(SDXL):
@@ -582,7 +676,7 @@ class DPMpp2mCFGppSolver(SDXL):
         #################################
 
         # prepare alphas and sigmas
-        alphas = self.scheduler.alphas_cumprod[self.scheduler.timesteps.cpu()]
+        alphas = self.scheduler.alphas_cumprod[self.scheduler.timesteps.int().cpu()].cpu()
         sigmas = (1-alphas).sqrt() / alphas.sqrt()
 
         # initialize 
@@ -594,7 +688,7 @@ class DPMpp2mCFGppSolver(SDXL):
         old_denoised = None  # initial value
 
         # sampling
-        pbar = tqdm(self.scheduler.timesteps[:-1], desc='SDXL')
+        pbar = tqdm(self.scheduler.timesteps[:-1].int(), desc='SDXL')
         for i, _ in enumerate(pbar):
             at = alphas[i]
             sigma = sigmas[i]
@@ -635,6 +729,28 @@ class DPMpp2mCFGppSolver(SDXL):
 
         # for the last stpe, do not add noise
         return x
+
+@register_solver('dpm++_2m_cfgpp_lightning')
+class DPMpp2mCFGppLightningSolver(DPMpp2mCFGppSolver, SDXLLightning):
+    def __init__(self, **kwargs):
+        SDXLLightning.__init__(self, **kwargs)
+    
+    def reverse_process(self,
+                        null_prompt_embeds,
+                        prompt_embeds,
+                        cfg_guidance,
+                        add_cond_kwargs,
+                        shape=(1024, 1024),
+                        callback_fn=None,
+                        **kwargs):
+        assert cfg_guidance == 1.0, "CFG should be turned off in the lightning version"
+        return super().reverse_process(null_prompt_embeds, 
+                                        prompt_embeds, 
+                                        cfg_guidance, 
+                                        add_cond_kwargs, 
+                                        shape, 
+                                        callback_fn, 
+                                        **kwargs)
 
 @register_solver("ddim_edit_cfg++")
 class EditWardSwapDDIMCFGpp(EditWardSwapDDIM):

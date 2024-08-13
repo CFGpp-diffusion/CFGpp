@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+import os
 
 from munch import munchify
 from torchvision.utils import save_image
@@ -12,7 +13,8 @@ from utils.log_util import create_workdir, set_seed
 
 def main():
     parser = argparse.ArgumentParser(description="Latent Diffusion")
-    parser.add_argument("--workdir", type=Path, default="examples/workdir/t2i")
+    parser.add_argument("--workdir", type=Path, default="examples/workdir/mscoco")
+    parser.add_argument('--prompt_dir', type=Path, default=Path('examples/assets/coco_v2.txt'))
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--null_prompt", type=str, default="")
     parser.add_argument("--prompt", type=str, default="")
@@ -26,6 +28,17 @@ def main():
     set_seed(args.seed)
     create_workdir(args.workdir)
 
+    # load prompt
+    text_list = []
+    with open(args.prompt_dir, 'r') as f:
+        lines = f.readlines()
+        for line in lines:
+            stripped_line = line.strip()
+            if stripped_line:  # Only add non-empty lines
+                text_list.append(stripped_line)
+    text_list = text_list[:10000] # Test for 10k MS-COCO validation
+
+
     solver_config = munchify({'num_sampling': args.NFE })
     callback = ComposeCallback(workdir=args.workdir,
                                frequency=1,
@@ -38,22 +51,15 @@ def main():
                                  solver_config=solver_config,
                                  device=args.device)
 
-        result = solver.sample(prompt1=[args.null_prompt, args.prompt],
-                                prompt2=[args.null_prompt, args.prompt],
-                                cfg_guidance=args.cfg_guidance,
-                                target_size=(1024, 1024),
-                                callback_fn=callback)
+        for i, text in enumerate(text_list):
+            print(f'Processing {i+1}/{len(text_list)}: {text}')
 
-    else:
-        solver = get_solver(args.method,
-                            solver_config=solver_config,
-                            device=args.device)
-        result = solver.sample(prompt=[args.null_prompt, args.prompt],
-                               cfg_guidance=args.cfg_guidance,
-                               callback_fn=callback)
-
-    
-    save_image(result, args.workdir.joinpath(f'result/generated.png'), normalize=True)
+            result = solver.sample(prompt1=[args.null_prompt, text],
+                                    prompt2=[args.null_prompt, text],
+                                    cfg_guidance=args.cfg_guidance,
+                                    target_size=(1024, 1024),
+                                    callback_fn=callback)
+            save_image(result, args.workdir.joinpath(f'{str(i).zfill(5)}.png'), normalize=True)
 
 if __name__ == "__main__":
     main()
