@@ -505,7 +505,7 @@ class EulerCFGSolver(Kdiffusion):
                                    sigmas=self.k_sigmas).to(torch.float16)
 
         # Sampling
-        pbar = tqdm(self.scheduler.timesteps, desc="SD")
+        pbar = tqdm(self.scheduler.timesteps, desc="Euler")
         for i, _ in enumerate(pbar):
             sigma = self.k_sigmas[i]
             t = self.sigma_to_t(sigma).to(self.device)
@@ -545,7 +545,7 @@ class EulerAncestralCFGSolver(Kdiffusion):
                                    latent_dim=(1, 4, 64, 64),
                                    sigmas=self.k_sigmas).to(torch.float16)
         # Sampling
-        pbar = tqdm(self.scheduler.timesteps, desc="SD")
+        pbar = tqdm(self.scheduler.timesteps, desc="Euler_a")
         for i, _ in enumerate(pbar):
             sigma = self.k_sigmas[i]
             t = self.sigma_to_t(sigma).to(self.device)
@@ -588,7 +588,7 @@ class DPMpp2sAncestralCFGSolver(Kdiffusion):
                                    latent_dim=(1, 4, 64, 64),
                                    sigmas=self.k_sigmas).to(torch.float16)
         # Sampling
-        pbar = tqdm(self.scheduler.timesteps, desc="SD")
+        pbar = tqdm(self.scheduler.timesteps, desc="DPM++2s_a")
         for i, _ in enumerate(pbar):
             sigma = self.k_sigmas[i]
             t_1 = self.sigma_to_t(sigma).to(self.device)
@@ -647,7 +647,7 @@ class DPMpp2mCFGSolver(Kdiffusion):
                                    sigmas=self.k_sigmas).to(torch.float16)
         old_denoised = None # buffer
         # Sampling
-        pbar = tqdm(self.scheduler.timesteps, desc="SD")
+        pbar = tqdm(self.scheduler.timesteps, desc="DPM++_2m")
         for i, _ in enumerate(pbar):
             sigma = self.k_sigmas[i]
             t1 = self.sigma_to_t(sigma).to(self.device)
@@ -881,7 +881,7 @@ class EulerCFGppSolver(Kdiffusion):
                                    sigmas=self.k_sigmas).to(torch.float16)
 
         # Sampling
-        pbar = tqdm(self.scheduler.timesteps, desc="SD")
+        pbar = tqdm(self.scheduler.timesteps, desc="Euler_cpp")
         for i, _ in enumerate(pbar):
             sigma = self.k_sigmas[i]
             t = self.sigma_to_t(sigma).to(self.device)
@@ -921,7 +921,7 @@ class EulerAncestralCFGppSolver(Kdiffusion):
                                    latent_dim=(1, 4, 64, 64),
                                    sigmas=self.k_sigmas).to(torch.float16)
         # Sampling
-        pbar = tqdm(self.scheduler.timesteps, desc="SD")
+        pbar = tqdm(self.scheduler.timesteps, desc="Euler_a_cpp")
         for i, _ in enumerate(pbar):
             sigma = self.k_sigmas[i]
             t = self.sigma_to_t(sigma).to(self.device)
@@ -962,7 +962,7 @@ class DPMpp2sAncestralCFGppSolver(Kdiffusion):
                                    latent_dim=(1, 4, 64, 64),
                                    sigmas=self.k_sigmas).to(torch.float16)
         # Sampling
-        pbar = tqdm(self.scheduler.timesteps, desc="SD")
+        pbar = tqdm(self.scheduler.timesteps, desc="DPM++2s_a_cpp")
         for i, _ in enumerate(pbar):
             sigma = self.k_sigmas[i]
             t_1 = self.sigma_to_t(sigma).to(self.device)
@@ -1020,7 +1020,7 @@ class DPMpp2mCFGppSolver(Kdiffusion):
                                    sigmas=self.k_sigmas).to(torch.float16)
         old_denoised = None # buffer
         # Sampling
-        pbar = tqdm(self.scheduler.timesteps, desc="SD")
+        pbar = tqdm(self.scheduler.timesteps, desc="DPM++_2m_cpp")
         for i, _ in enumerate(pbar):
             sigma = self.k_sigmas[i]
             t_1 = self.sigma_to_t(sigma).to(self.device)
