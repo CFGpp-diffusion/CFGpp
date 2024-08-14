@@ -9,6 +9,7 @@ from diffusers.models.attention_processor import (AttnProcessor2_0,
                                                   LoRAXFormersAttnProcessor,
                                                   XFormersAttnProcessor)
 from tqdm import tqdm
+from latent_diffusion import get_sigmas_karras, get_ancestral_step, append_zero
 
 ####### Factory #######
 __SOLVER__ = {}
@@ -282,11 +283,16 @@ class SDXL():
         elif method == 'random':
             size = kwargs.get('size', (1, 4, 128, 128))
             z = torch.randn(size).to(self.device)
+        elif method == 'random_kdiffusion':
+            size = kwargs.get('latent_dim', (1, 4, 128, 128))
+            sigmas = kwargs.get('sigmas', [14.6146])
+            z = torch.randn(size).to(self.device)
+            z = z * (sigmas[0] ** 2 + 1) ** 0.5
         else: 
             raise NotImplementedError
 
         return z.requires_grad_()
-
+    
     def inversion(self, z0, uc, c, cfg_guidance, add_cond_kwargs):
         # if we use cfg_guidance=0.0 or 1.0 for inversion, add_cond_kwargs must be splitted. 
         if cfg_guidance == 0.0 or cfg_guidance == 1.0:
@@ -310,6 +316,41 @@ class SDXL():
     
     def reverse_process(self, *args, **kwargs):
         raise NotImplementedError
+
+    # Belows are for K-diffusion sampling (euler, etc)
+    def calculate_input(self, x, sigma):
+        return x / (sigma ** 2 + 1) ** 0.5
+    
+    # Related to the Tweedie's formula in VE
+    def calculate_denoised(self, x, model_pred, sigma):
+        return x - model_pred * sigma
+    
+    def sigma_to_t(self, sigma, quantize=None):
+        '''Taken from k_diffusion/external.py'''
+        quantize = self.quantize if quantize is None else quantize
+        total_sigmas = (1-self.total_alphas).sqrt() / self.total_alphas.sqrt()
+        dists = sigma - total_sigmas[:, None]
+        if quantize:
+            return dists.abs().argmin(dim=0).view(sigma.shape)
+        low_idx = dists.ge(0).cumsum(dim=0).argmax(dim=0).clamp(max=total_sigmas.shape[0] - 2)
+        high_idx = low_idx + 1
+        low, high = total_sigmas[low_idx], total_sigmas[high_idx]
+        w = (low - sigma) / (low - high)
+        w = w.clamp(0, 1)
+        t = (1 - w) * low_idx + w * high_idx
+        return t.view(sigma.shape)
+
+    def to_d(self, x, sigma, denoised):
+        '''converts a denoiser output to a Karras ODE derivative'''
+        return (x - denoised) / sigma.item()
+    
+    def kdiffusion_zt_to_denoised(self, x, sigma, uc, c, cfg_guidance, t, add_cond_kwargs):
+        xc = self.calculate_input(x, sigma)
+        noise_uc, noise_c = self.predict_noise(xc, t, uc, c, add_cond_kwargs)
+        noise_pred = noise_uc + cfg_guidance * (noise_c - noise_uc)
+        denoised = self.calculate_denoised(x, noise_pred, sigma)
+        uncond_denoised = self.calculate_denoised(x, noise_uc, sigma)
+        return denoised, uncond_denoised
 
 
 class SDXLLightning(SDXL):
@@ -406,6 +447,57 @@ class BaseDDIM(SDXL):
 
         # for the last stpe, do not add noise
         return z0t
+
+@register_solver('euler')
+class Euler(SDXL):
+    quantize = True
+    """
+    Karras Euler (VE casted)
+    """
+    @torch.autocast(device_type='cuda', dtype=torch.float16)
+    def reverse_process(self,
+                        null_prompt_embeds,
+                        prompt_embeds,
+                        cfg_guidance,
+                        add_cond_kwargs,
+                        shape=(1024, 1024),
+                        callback_fn=None,
+                        **kwargs):
+        # convert to karras sigma scheduler
+        total_sigmas = (1-self.total_alphas).sqrt() / self.total_alphas.sqrt()
+        sigmas = get_sigmas_karras(len(self.scheduler.timesteps), total_sigmas.min(), total_sigmas.max(), rho=7.)
+
+        # initialize
+        zt_dim = (1, 4, shape[1] // self.vae_scale_factor, shape[0] // self.vae_scale_factor)
+        zt = self.initialize_latent(method="random_kdiffusion",
+                                   latent_dim=zt_dim,
+                                   sigmas=sigmas).to(torch.float16)
+        
+        # sampling
+        pbar = tqdm(self.scheduler.timesteps.int(), desc='SDXL')
+        for step, t in enumerate(pbar):
+            sigma = sigmas[step]
+            t = self.sigma_to_t(sigma).to(self.device)
+
+            with torch.no_grad():
+                z0t, _ = self.kdiffusion_zt_to_denoised(zt, sigma, null_prompt_embeds, prompt_embeds, cfg_guidance, t, add_cond_kwargs)
+            
+            d = self.to_d(zt, sigma, z0t)
+
+            # Euler method
+            zt = z0t + d * sigmas[step+1]
+
+            if callback_fn is not None:
+                callback_kwargs = { 'z0t': z0t.detach(),
+                                    'zt': zt.detach(),
+                                    'decode': self.decode}
+                callback_kwargs = callback_fn(step, t, callback_kwargs)
+                z0t = callback_kwargs["z0t"]
+                zt = callback_kwargs["zt"]
+            
+        # for the last stpe, do not add noise
+        return z0t
+
 
 @register_solver('ddim_lightning')
 class BaseDDIMLight(BaseDDIM, SDXLLightning):
@@ -617,6 +709,56 @@ class BaseDDIMCFGpp(SDXL):
         # for the last stpe, do not add noise
         return z0t
 
+@register_solver('euler_cfg++')
+class EulerCFGpp(SDXL):
+    quantize = True
+    """
+    Karras Euler (VE casted)
+    """
+    @torch.autocast(device_type='cuda', dtype=torch.float16)
+    def reverse_process(self,
+                        null_prompt_embeds,
+                        prompt_embeds,
+                        cfg_guidance,
+                        add_cond_kwargs,
+                        shape=(1024, 1024),
+                        callback_fn=None,
+                        **kwargs):
+        # convert to karras sigma scheduler
+        total_sigmas = (1-self.total_alphas).sqrt() / self.total_alphas.sqrt()
+        sigmas = get_sigmas_karras(len(self.scheduler.timesteps), total_sigmas.min(), total_sigmas.max(), rho=7.)
+
+        # initialize
+        zt_dim = (1, 4, shape[1] // self.vae_scale_factor, shape[0] // self.vae_scale_factor)
+        zt = self.initialize_latent(method="random_kdiffusion",
+                                   latent_dim=zt_dim,
+                                   sigmas=sigmas).to(torch.float16)
+        
+        # sampling
+        pbar = tqdm(self.scheduler.timesteps.int(), desc='SDXL')
+        for step, t in enumerate(pbar):
+            sigma = sigmas[step]
+            t = self.sigma_to_t(sigma).to(self.device)
+
+            with torch.no_grad():
+                z0t, z0t_uncond = self.kdiffusion_zt_to_denoised(zt, sigma, null_prompt_embeds, prompt_embeds, cfg_guidance, t, add_cond_kwargs)
+            
+            d = self.to_d(zt, sigma, z0t_uncond)
+
+            # Euler method
+            zt = z0t + d * sigmas[step+1]
+
+            if callback_fn is not None:
+                callback_kwargs = {'z0t': z0t.detach(),
+                                    'zt': zt.detach(),
+                                    'decode': self.decode}
+                callback_kwargs = callback_fn(step, t, callback_kwargs)
+                z0t = callback_kwargs["z0t"]
+                zt = callback_kwargs["zt"]
+            
+        # for the last stpe, do not add noise
+        return z0t
+
 @register_solver('ddim_cfg++_lightning')
 class BaseDDIMCFGppLight(BaseDDIMCFGpp, SDXLLightning):
     def __init__(self, **kwargs):
@@ -642,25 +784,6 @@ class BaseDDIMCFGppLight(BaseDDIMCFGpp, SDXLLightning):
 @register_solver('dpm++_2m_cfgpp')
 class DPMpp2mCFGppSolver(SDXL):
     quantize = True
-
-    def sigma_to_t(self, sigma, quantize=None):
-        '''Taken from k_diffusion/external.py'''
-        quantize = self.quantize if quantize is None else quantize
-        total_sigmas = (1-self.total_alphas).sqrt() / self.total_alphas.sqrt()
-        dists = sigma - total_sigmas[:, None]
-        if quantize:
-            return dists.abs().argmin(dim=0).view(sigma.shape)
-        low_idx = dists.ge(0).cumsum(dim=0).argmax(dim=0).clamp(max=total_sigmas.shape[0] - 2)
-        high_idx = low_idx + 1
-        low, high = total_sigmas[low_idx], total_sigmas[high_idx]
-        w = (low - sigma) / (low - high)
-        w = w.clamp(0, 1)
-        t = (1 - w) * low_idx + w * high_idx
-        return t.view(sigma.shape)
-
-    def to_d(self, x, sigma, denoised):
-        '''converts a denoiser output to a Karras ODE derivative'''
-        return (x - denoised) / sigma.item()
 
     @torch.autocast("cuda")
     def reverse_process(self,

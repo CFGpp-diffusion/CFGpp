@@ -27,10 +27,10 @@ def main():
     create_workdir(args.workdir)
 
     solver_config = munchify({'num_sampling': args.NFE })
-    callback = ComposeCallback(workdir=args.workdir,
-                               frequency=1,
-                               callbacks=["draw_noisy", 'draw_tweedie'])
-    # callback = None
+    #callback = ComposeCallback(workdir=args.workdir,
+    #                           frequency=1,
+    #                           callbacks=["draw_noisy", 'draw_tweedie'])
+    callback = None
 
 
     if args.model == "sdxl" or args.model == "sdxl_lightning":
