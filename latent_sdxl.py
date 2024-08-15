@@ -55,6 +55,10 @@ class SDXL():
         # sampling parameters
         self.scheduler = DDIMScheduler.from_pretrained(model_key, subfolder="scheduler")
         self.total_alphas = self.scheduler.alphas_cumprod.clone()
+
+        self.sigmas = (1-self.total_alphas).sqrt() / self.total_alphas.sqrt()
+        self.log_sigmas = self.sigmas.log()
+
         N_ts = len(self.scheduler.timesteps)
         self.scheduler.set_timesteps(solver_config.num_sampling, device=device)
         self.skip = N_ts // solver_config.num_sampling
@@ -288,6 +292,7 @@ class SDXL():
             sigmas = kwargs.get('sigmas', [14.6146])
             z = torch.randn(size).to(self.device)
             z = z * (sigmas[0] ** 2 + 1) ** 0.5
+            #z = z * sigmas[0]
         else: 
             raise NotImplementedError
 
@@ -339,6 +344,11 @@ class SDXL():
         w = w.clamp(0, 1)
         t = (1 - w) * low_idx + w * high_idx
         return t.view(sigma.shape)
+    
+    def timestep(self, sigma):
+        log_sigma = sigma.log()
+        dists = log_sigma.to(self.log_sigmas.device) - self.log_sigmas[:, None]
+        return dists.abs().argmin(dim=0).view(sigma.shape).to(sigma.device)
 
     def to_d(self, x, sigma, denoised):
         '''converts a denoiser output to a Karras ODE derivative'''
@@ -357,13 +367,15 @@ class SDXLLightning(SDXL):
     def __init__(self, 
                  solver_config: dict,
                  base_model_key:str="stabilityai/stable-diffusion-xl-base-1.0",
-                 light_model_ckpt:str="ckpt/sdxl_lightning_4step_unet.safetensors",
+                 #light_model_ckpt:str="ckpt/sdxl_lightning_4step_unet.safetensors",
+                 light_model_ckpt:str="ckpt/LEOSAM HelloWorld 极速版_6.0 Lightning.safetensors",
                  dtype=torch.float16,
                  device='cuda'):
 
         self.device = device
 
         # load the student model
+        """
         unet = UNet2DConditionModel.from_config(base_model_key, subfolder="unet").to("cuda", torch.float16)
         ext = os.path.splitext(light_model_ckpt)[1]
         if ext == ".safetensors":
@@ -373,9 +385,11 @@ class SDXLLightning(SDXL):
         print(unet.load_state_dict(state_dict, strict=True))
         unet.requires_grad_(False)
         self.unet = unet
+        """
 
-        #pipe2 = StableDiffusionXLPipeline.from_single_file(light_model_ckpt, torch_dtype=dtype).to(device)
-        pipe = StableDiffusionXLPipeline.from_pretrained(base_model_key, unet=self.unet, torch_dtype=dtype).to(device)
+        pipe = StableDiffusionXLPipeline.from_single_file(light_model_ckpt, torch_dtype=dtype).to(device)
+        self.unet = pipe.unet
+        #pipe = StableDiffusionXLPipeline.from_pretrained(base_model_key, unet=self.unet, torch_dtype=dtype).to(device)
         self.dtype = dtype
 
         # avoid overflow in float16
@@ -392,6 +406,10 @@ class SDXLLightning(SDXL):
         # sampling parameters
         self.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, timestep_spacing="trailing")
         self.total_alphas = self.scheduler.alphas_cumprod.clone()
+
+        self.sigmas = (1-self.total_alphas).sqrt() / self.total_alphas.sqrt()
+        self.log_sigmas = self.sigmas.log()
+
         N_ts = len(self.scheduler.timesteps)
         self.scheduler.set_timesteps(solver_config.num_sampling, device=device)
         self.skip = N_ts // solver_config.num_sampling
@@ -477,7 +495,7 @@ class Euler(SDXL):
         pbar = tqdm(self.scheduler.timesteps.int(), desc='SDXL')
         for step, t in enumerate(pbar):
             sigma = sigmas[step]
-            t = self.sigma_to_t(sigma).to(self.device)
+            t = self.timestep(sigma).to(self.device)
 
             with torch.no_grad():
                 z0t, _ = self.kdiffusion_zt_to_denoised(zt, sigma, null_prompt_embeds, prompt_embeds, cfg_guidance, t, add_cond_kwargs)
@@ -498,12 +516,39 @@ class Euler(SDXL):
         # for the last stpe, do not add noise
         return z0t
 
-
 @register_solver('ddim_lightning')
 class BaseDDIMLight(BaseDDIM, SDXLLightning):
     def __init__(self, **kwargs):
         SDXLLightning.__init__(self, **kwargs)
     
+    def reverse_process(self,
+                        null_prompt_embeds,
+                        prompt_embeds,
+                        cfg_guidance,
+                        add_cond_kwargs,
+                        shape=(1024, 1024),
+                        callback_fn=None,
+                        **kwargs):
+        assert cfg_guidance == 1.0, "CFG should be turned off in the lightning version"
+        return super().reverse_process(null_prompt_embeds, 
+                                        prompt_embeds, 
+                                        cfg_guidance, 
+                                        add_cond_kwargs, 
+                                        shape, 
+                                        callback_fn, 
+                                        **kwargs)
+
+@register_solver('euler_lightning')
+class EulerLight(Euler, SDXLLightning):
+    """
+    Karras Euler (VE casted)
+    """
+    quantize = True
+
+    def __init__(self, **kwargs):
+        SDXLLightning.__init__(self, **kwargs)
+
+    @torch.autocast(device_type='cuda', dtype=torch.float16)
     def reverse_process(self,
                         null_prompt_embeds,
                         prompt_embeds,
@@ -726,7 +771,10 @@ class EulerCFGpp(SDXL):
                         **kwargs):
         # convert to karras sigma scheduler
         total_sigmas = (1-self.total_alphas).sqrt() / self.total_alphas.sqrt()
-        sigmas = get_sigmas_karras(len(self.scheduler.timesteps), total_sigmas.min(), total_sigmas.max(), rho=7.)
+        #sigmas = get_sigmas_karras(len(self.scheduler.timesteps), total_sigmas.min(), total_sigmas.max(), rho=7.)
+        print(self.scheduler.timesteps.cpu().int())
+        sigmas = total_sigmas[torch.round(self.scheduler.timesteps.cpu()).int()]
+        sigmas = torch.cat([sigmas, torch.tensor([0.0])])
 
         # initialize
         zt_dim = (1, 4, shape[1] // self.vae_scale_factor, shape[0] // self.vae_scale_factor)
@@ -738,7 +786,7 @@ class EulerCFGpp(SDXL):
         pbar = tqdm(self.scheduler.timesteps.int(), desc='SDXL')
         for step, t in enumerate(pbar):
             sigma = sigmas[step]
-            t = self.sigma_to_t(sigma).to(self.device)
+            t = self.timestep(sigma).to(self.device)
 
             with torch.no_grad():
                 z0t, z0t_uncond = self.kdiffusion_zt_to_denoised(zt, sigma, null_prompt_embeds, prompt_embeds, cfg_guidance, t, add_cond_kwargs)
@@ -758,6 +806,34 @@ class EulerCFGpp(SDXL):
             
         # for the last stpe, do not add noise
         return z0t
+
+@register_solver('euler_cfg++_lightning')
+class EulerCFGppLight(EulerCFGpp, SDXLLightning):
+    """
+    Karras Euler (VE casted)
+    """
+    quantize = True
+
+    def __init__(self, **kwargs):
+        SDXLLightning.__init__(self, **kwargs)
+
+    @torch.autocast(device_type='cuda', dtype=torch.float16)
+    def reverse_process(self,
+                        null_prompt_embeds,
+                        prompt_embeds,
+                        cfg_guidance,
+                        add_cond_kwargs,
+                        shape=(1024, 1024),
+                        callback_fn=None,
+                        **kwargs):
+        assert cfg_guidance == 1.0, "CFG should be turned off in the lightning version"
+        return super().reverse_process(null_prompt_embeds, 
+                                        prompt_embeds, 
+                                        cfg_guidance, 
+                                        add_cond_kwargs, 
+                                        shape, 
+                                        callback_fn, 
+                                        **kwargs)
 
 @register_solver('ddim_cfg++_lightning')
 class BaseDDIMCFGppLight(BaseDDIMCFGpp, SDXLLightning):

@@ -43,7 +43,7 @@ def append_zero(x):
 
 def get_sigmas_karras(n, sigma_min, sigma_max, rho=7., device='cpu'):
     """Constructs the noise schedule of Karras et al. (2022)."""
-    ramp = torch.linspace(0, 1, n, device=device)
+    ramp = torch.linspace(0, 1, n+1, device=device)[:-1]
     min_inv_rho = sigma_min ** (1 / rho)
     max_inv_rho = sigma_max ** (1 / rho)
     sigmas = (max_inv_rho + ramp * (min_inv_rho - max_inv_rho)) ** rho
