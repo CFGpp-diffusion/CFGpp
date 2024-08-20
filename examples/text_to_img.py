@@ -14,7 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description="Latent Diffusion")
     parser.add_argument("--workdir", type=Path, default="examples/workdir/t2i")
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--null_prompt", type=str, default="low quality,jpeg artifacts,blurry,poorly drawn,ugly,worst quality,")
+    parser.add_argument("--null_prompt", type=str, default="")
     parser.add_argument("--prompt", type=str, default="")
     parser.add_argument("--cfg_guidance", type=float, default=7.5)
     parser.add_argument("--method", type=str, default='ddim')
