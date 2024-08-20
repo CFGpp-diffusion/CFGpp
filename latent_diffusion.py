@@ -614,7 +614,7 @@ class DPMpp2sAncestralCFGSolver(Kdiffusion):
                     t_2 = self.sigma_to_t(sigma_s).to(self.device)
                     denoised_2, _ = self.x_to_denoised(x_2, sigma_s, uc, c, cfg_guidance, t_2)
                 
-                x = (sigma_fn(t_next) / sigma_fn(t)) * x - (-h).expm1() * denoised_2
+                x = denoised_2 - torch.exp(-h) * denoised_2 + (sigma_fn(t_next) / sigma_fn(t)) * x
 
             # Noise addition
             if self.k_sigmas[i + 1] > 0:
