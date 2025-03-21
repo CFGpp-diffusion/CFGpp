@@ -105,11 +105,13 @@ Note that using callback may take more time due to file save. You can refer util
 If you find our method useful, please cite as below or leave a star to this repository.
 
 ```
-@article{chung2024cfg++,
-  title={CFG++: Manifold-constrained Classifier Free Guidance for Diffusion Models},
-  author={Chung, Hyungjin and Kim, Jeongsol and Park, Geon Yeong and Nam, Hyelin and Ye, Jong Chul},
-  journal={arXiv preprint arXiv:2406.08070},
-  year={2024}
+@inproceedings{
+chung2025cfg,
+title={{CFG}++: Manifold-constrained Classifier Free Guidance for Diffusion Models},
+author={Hyungjin Chung and Jeongsol Kim and Geon Yeong Park and Hyelin Nam and Jong Chul Ye},
+booktitle={The Thirteenth International Conference on Learning Representations},
+year={2025},
+url={https://openreview.net/forum?id=E77uvbOTtp}
 }
 ```
 
